@@ -1,0 +1,197 @@
+# Importing the libraries needed for the model
+from sklearn.model_selection import train_test_split
+import pandas as pd
+from rasterio import open as rasopen
+from sklearn.ensemble import RandomForestRegressor
+import numpy as np
+from osgeo import gdal, gdal_array
+import os
+import rasterio
+
+# Importing raw data
+data=pd.read_csv("E:/model/PlantWaterUse.csv", header=None)
+
+# Check the dataset for missing values
+print(data.isnull().sum())
+
+# Replace missing values with mean values
+data.fillna(data.mean(), inplace=True)
+
+# Set up a list and store different elements
+Data=data.iloc[:,:32]
+Data.columns=['PRE','TEM','AI','H','E','Eb','Et','swc_0-28cm','swc_28-289cm','WTD',
+                            'VT','LT','EPRD', 'clay_0-30cm','clay_30-60cm', 'clay_60-200cm',
+                           'SNC_0-30cm', 'SNC_30-60cm','SNC_60-200cm',
+                           'sand_0-30cm','sand_30-60cm','sand_60-200cm',
+                           'silt_0-30cm','silt_30-60cm','silt_60-200cm',
+                           'SOC_0-30cm','SOC_30-60cm','SOC_60-200cm',
+                           'shallow','middle','deep','gw']
+x=Data[['PRE','TEM','AI','H','E','Eb','Et','swc_0-28cm','swc_28-289cm','WTD',
+                            'VT','LT','EPRD', 'clay_0-30cm','clay_30-60cm', 'clay_60-200cm',
+                           'SNC_0-30cm', 'SNC_30-60cm','SNC_60-200cm',
+                           'sand_0-30cm','sand_30-60cm','sand_60-200cm',
+                           'silt_0-30cm','silt_30-60cm','silt_60-200cm',
+                           'SOC_0-30cm','SOC_30-60cm','SOC_60-200cm']]
+y=Data[['shallow','middle','deep','gw']]
+
+# Check the number of samples in the dataset
+print("Sample size of dataset:", len(Data))
+
+# Separation of training data from test data, 20 per cent test data and 80 per cent training data
+x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=0.2,random_state=42)
+
+# Parameter settings
+clf=RandomForestRegressor(n_estimators=600,random_state=42,n_jobs=-1,bootstrap=True,
+                          max_depth=10,min_samples_leaf=2,min_samples_split=6)
+
+# Perform data fitting
+clf.fit(x_train,y_train)
+
+# Define the output directory
+output_directory = "E:/model6.3/output4"
+
+# Define the directories containing the time series files
+pre_directory = "E:/model6.3/pre_0.25"
+tmp_directory = "E:/model6.3/tem_0.25"
+ai_directory = "E:/model6.3/ai_0.25"
+E_directory = "E:/model6.3/E_0.25"
+Eb_directory = "E:/model6.3/Eb_0.25"
+Et_directory = "E:/model6.3/Et_0.25"
+SW1_directory = "E:/model6.3/SWC_0-28cm_0.25"
+SW2_directory = "E:/model6.3/SWC_28-289cm_0.25"
+WTD_directory = "E:/model6.3/WTD_0.25"
+
+# List all the files in the pre and tmp directories
+pre_files = os.listdir(pre_directory)
+tmp_files = os.listdir(tem_directory)
+ai_files = os.listdir(ai_directory)
+E_files=os.listdir(E_directory)
+Eb_files=os.listdir(Eb_directory)
+Et_files=os.listdir(Et_directory)
+SW1_files=os.listdir(SW1_directory)
+SW2_files=os.listdir(SW2_directory)
+WTD_files=os.listdir(WTD_directory)
+
+# Sort the file names to ensure sequential ordering
+pre_files.sort()
+tem_files.sort()
+ai_files.sort()
+E_files.sort()
+Eb_files.sort()
+Et_files.sort()
+SW1_files.sort()
+SW2_files.sort()
+WTD_files.sort()
+
+# Prepare the feature files for prediction
+feature_files = ["E:/model6.3/H_0.25.tif", "E:/model6.3/LT_0.25.tif",
+                 "E:/model6.3/LT_0.25.tif","E:/model6.3/EPRD_0.25.tif",
+                 "E:/model6.3/Soilgrids_0.25/clay_0-30cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/clay_30-60cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/clay_60-200cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/SNC_0-30cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/SNC_30-60cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/SNC_60-200cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/sand_0-30cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/sand_30-60cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/sand_60-200cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/silt_0-30cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/silt_30-60cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/silt_60-200cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/SOC_0-30cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/SOC_30-60cm.tif",
+                 "E:/model6.3/Soilgrids_0.25/SOC_60-200cm.tif" ]
+features = [gdal.Open(file).ReadAsArray() for file in feature_files]
+
+for pre_file, tmp_file, ai_file, E_file, Eb_file, Et_file, \
+    SW1_file, SW2_file, WTD_file in zip(pre_files, tmp_files, ai_files,
+                                        E_files, Eb_files, Et_files,SW1_files,SW2_files,WTD_files):
+    pre_ds = gdal.Open(os.path.join(pre_directory, pre_file))
+    pre_feature = pre_ds.ReadAsArray()
+
+    tem_ds = gdal.Open(os.path.join(tem_directory, tem_file))
+    tem_feature = tem_ds.ReadAsArray()
+
+    ai_ds = gdal.Open(os.path.join(ai_directory, ai_file))
+    ai_feature = ai_ds.ReadAsArray()
+
+    E_ds = gdal.Open(os.path.join(E_directory, E_file))
+    E_feature = E_ds.ReadAsArray()
+
+    Eb_ds = gdal.Open(os.path.join(Eb_directory, Eb_file))
+    Eb_feature = Eb_ds.ReadAsArray()
+
+    Et_ds = gdal.Open(os.path.join(Et_directory, Et_file))
+    Et_feature = Et_ds.ReadAsArray()
+
+    SW1_ds = gdal.Open(os.path.join(SW1_directory, SW1_file))
+    SW1_feature = SW1_ds.ReadAsArray()
+
+    SW2_ds = gdal.Open(os.path.join(SW2_directory, SW2_file))
+    SW2_feature = SW2_ds.ReadAsArray()
+
+    WTD_ds = gdal.Open(os.path.join(WTD_directory,WTD_file))
+    WTD_feature = WTD_ds.ReadAsArray()
+
+    # Combine pre and tem features with fixed features
+    selected_features = [pre_feature, tem_feature, ai_feature,E_feature, Eb_feature, Et_feature,
+                         SW1_feature, SW2_feature, WTD_feature] + features
+    min_shape = min([feature.shape for feature in selected_features])
+    selected_features_resized = [np.resize(feature, min_shape) for feature in selected_features]
+
+    X = np.stack(selected_features_resized, axis=-1)
+    # Replace missing values with mean values
+    nan_indices = np.isnan(X)
+    mean_values=X.mean()
+    X[nan_indices] = 0
+
+    # Getting predictions
+    predictions = clf.predict(X.reshape(-1, 28))
+
+    # Break down the forecast results into four components
+    predictions_shallow = predictions[:, 0]
+    predictions_middle = predictions[:, 1]
+    predictions_deep = predictions[:, 2]
+    predictions_gw = predictions[:, 3]
+
+    # Reshape the forecast results array
+    prediction_array_shallow = predictions_shallow.reshape(min_shape)
+    prediction_array_middle = predictions_middle.reshape(min_shape)
+    prediction_array_deep = predictions_deep.reshape(min_shape)
+    prediction_array_gw = predictions_gw.reshape(min_shape)
+
+    # Save TIFF files of shallow, medium, deep and groundwater prediction results separately
+    output_tiff_shallow = os.path.join(output_directory,  os.path.splitext(ai_file)[0] + '_shallow' + '.tif')
+    output_tiff_middle = os.path.join(output_directory, os.path.splitext(ai_file)[0] + '_middle'+ '.tif')
+    output_tiff_deep = os.path.join(output_directory, os.path.splitext(ai_file)[0] + '_deep'+ '.tif')
+    output_tiff_gw = os.path.join(output_directory, os.path.splitext(ai_file)[0] + '_gw' + '.tif')
+
+    # Create and write TIFF files
+    def write_tiff(output_tiff, prediction_array):
+       driver = gdal.GetDriverByName('GTiff')
+       ds_out = driver.Create(output_tiff, min_shape[1], min_shape[0], 1, gdal_array.NumericTypeCodeToGDALTypeCode(np.float64))
+       ds_out.GetRasterBand(1).WriteArray(prediction_array)
+       ds_out.GetRasterBand(1).SetNoDataValue(-9999)
+       ds_out.SetProjection(pre_ds.GetProjection())
+       ds_out.SetGeoTransform(pre_ds.GetGeoTransform())
+       ds_out.FlushCache()
+
+    # TIFF files that hold shallow prediction results
+    write_tiff(output_tiff_shallow, prediction_array_shallow)
+    print("The shallow prediction results have been saved as：" + output_tiff_shallow)
+
+    # TIFF files that hold middle prediction results
+    write_tiff(output_tiff_middle, prediction_array_middle)
+    print("The middle prediction results have been saved as：" + output_tiff_middle)
+
+    # TIFF files that hold deep prediction results
+    write_tiff(output_tiff_deep, prediction_array_deep)
+    print("The deep prediction results have been saved as：" + output_tiff_deep)
+
+    # TIFF files that hold groundwater prediction results
+    write_tiff(output_tiff_gw, prediction_array_gw)
+    print("The groundwater prediction results have been saved as：" + output_tiff_gw)
+
+
+
+
